@@ -7,7 +7,8 @@
 // 坐标已做水平镜像，与预览一致
 // 全部本地自托管，不依赖 googleapis / jsdelivr（国内 CDN 常打不开）
 // 目录名避开 vendor：EdgeOne Pages 部署会把 vendor/ 当依赖目录整个排除（404）
-import { FilesetResolver, HandLandmarker } from '../mediapipe/tasks-vision/vision_bundle.mjs';
+// 后缀用 .js 不用 .mjs：EdgeOne 给 .mjs 回 octet-stream，浏览器模块 MIME 校验会拒绝
+import { FilesetResolver, HandLandmarker } from '../mediapipe/tasks-vision/vision_bundle.js';
 
 const WASM_URL = 'mediapipe/tasks-vision/wasm';
 const MODEL_URL = 'assets/hand_landmarker.task';

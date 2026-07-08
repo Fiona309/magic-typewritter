@@ -335,7 +335,8 @@
       if (!vid) { vid = Date.now().toString(36) + Math.random().toString(36).slice(2, 8); localStorage.setItem('_vid', vid); isNew = 1; }
       // 用绝对地址：站点迁到 EdgeOne 自有域名后，统计仍回报到 Netlify 云函数
       // （跨域简单 POST 无需预检就能送达，响应读不到也无所谓，本来就不读）
-      fetch('https://stranger-lights.netlify.app/.netlify/functions/track?new=' + isNew, { method: 'POST', keepalive: true }).catch(function () {});
+      // no-cors：跨域上报只管送达不读响应，避免控制台 CORS 报错
+      fetch('https://stranger-lights.netlify.app/.netlify/functions/track?new=' + isNew, { method: 'POST', keepalive: true, mode: 'no-cors' }).catch(function () {});
     } catch (e) {}
   })();
   </script>
