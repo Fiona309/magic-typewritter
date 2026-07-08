@@ -1,0 +1,32 @@
+# 静态站在 public/，云函数在 netlify/functions/（不会被当静态文件暴露）
+[build]
+  publish = "public"
+
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+
+# 大文件强缓存：WASM/手势模型内容永不变化，回访直接读本地缓存、零请求
+[[headers]]
+  for = "/vendor/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/assets/hand_landmarker.task"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+    # Netlify CDN 只对已知可压缩类型开 gzip，octet-stream 原样传 7.8MB（已实测）。
+    # 标成 wasm 诱导 CDN 压缩（实测 gzip 省 26%）；前端 fetch→arrayBuffer 不看类型，无副作用。
+    Content-Type = "application/wasm"
+
+# 友好网址
+[[redirects]]
+  from = "/stats"
+  to = "/.netlify/functions/stats"
+  status = 200
+
+[[redirects]]
+  from = "/track"
+  to = "/.netlify/functions/track"
+  status = 200

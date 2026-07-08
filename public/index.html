@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Stranger Things · Alphabet AR</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; background: #000; overflow: hidden; font-family: Georgia, 'Times New Roman', 'Songti SC', serif; }
+
+  /* 背景：暗客厅 + 全亮客厅（celebrate 时淡入/闪烁） */
+  .bg { position: fixed; inset: 0; width: 100vw; height: 100vh; object-fit: cover; user-select: none; pointer-events: none; }
+  /* will-change 让亮图常驻合成层：完成瞬间只做现成图层的淡入，
+     否则当帧新建图层+光栅化全屏大图，来不及画完的图块会黑一帧 */
+  #bgLit { opacity: 0; transition: opacity 0.6s; will-change: opacity; }
+
+  /* 灯泡（颜色 --c 运行时从图中采样）+ 字母柔光 */
+  #stage { position: fixed; inset: 0; z-index: 3; pointer-events: none; }
+  .bulb {
+    --c: #ffd966;
+    position: absolute; width: 58px; height: 58px; border-radius: 50%;
+    transform: translate(-50%, -50%); pointer-events: none;
+    background: radial-gradient(circle,
+      #fff 0%, var(--c) 16%,
+      color-mix(in srgb, var(--c) 55%, transparent) 42%, transparent 72%);
+    opacity: 0; transition: opacity 0.15s, scale 0.15s;
+  }
+  .bulb.hover { opacity: 0.95; scale: 1.2; }
+  .bulb.flash { opacity: 1; scale: 2.0; transition: opacity 0.05s, scale 0.05s; }
+  .bulb.on { opacity: 0.95; }
+  .letterGlow {
+    position: absolute; width: 84px; height: 84px; border-radius: 50%;
+    transform: translate(-50%, -50%); pointer-events: none;
+    background: radial-gradient(circle, rgba(255,235,190,0.8) 0%, rgba(255,200,120,0.35) 40%, transparent 70%);
+    opacity: 0; transition: opacity 0.18s;
+  }
+  .letterGlow.hover { opacity: 0.4; }
+  #stage.debug .bulb { opacity: 0.35; }
+  #stage.debug .bulb.hover { opacity: 0.95; }
+  #stage.debug .bulb::after {
+    content: attr(data-letter); position: absolute; inset: 0;
+    border: 1px dashed rgba(120, 220, 160, 0.8); border-radius: 50%;
+    color: #7fdc9a; font: 12px ui-monospace, monospace; display: flex;
+    align-items: flex-end; justify-content: center; padding-bottom: 2px;
+  }
+  #stage.debug .letterGlow { outline: 1px dotted rgba(120, 220, 160, 0.35); border-radius: 50%; }
+
+  /* 指尖光标 */
+  #cursorDot {
+    position: fixed; width: 26px; height: 26px; border-radius: 50%; z-index: 8;
+    border: 2px solid rgba(255, 217, 102, 0.95);
+    box-shadow: 0 0 14px rgba(255, 200, 80, 0.8), inset 0 0 8px rgba(255, 200, 80, 0.5);
+    transform: translate(-50%, -50%); pointer-events: none; opacity: 0; transition: opacity 0.25s;
+  }
+  #cursorDot.on { opacity: 1; }
+  #cursorDot.pinch { border-color: #fff; scale: 0.7; }
+  #cursorDot.fist { border-color: #ff5040; box-shadow: 0 0 14px rgba(255, 60, 40, 0.9); }
+
+  /* 当前字母指示 */
+  #hoverChip {
+    position: fixed; left: 22px; top: 20px; z-index: 9;
+    color: #ffd966; font-size: 42px; letter-spacing: 0.1em;
+    text-shadow: 0 0 18px rgba(255, 200, 80, 0.9); opacity: 0; transition: opacity 0.2s;
+    pointer-events: none;
+  }
+  #hoverChip.on { opacity: 1; }
+
+  /* 输入框（整句完成时飞到屏幕中央放大） */
+  #inputBox {
+    position: fixed; left: 50%; bottom: 40px; transform: translateX(-50%) scale(1); z-index: 10;
+    max-width: 86vw; padding: 14px 34px; border-radius: 10px;
+    backdrop-filter: blur(20px); background: rgba(0, 0, 0, 0.42);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    font-size: 36px; color: #fff; letter-spacing: 0.14em; white-space: nowrap;
+    transition: transform 0.9s cubic-bezier(0.22, 1, 0.36, 1), bottom 0.9s cubic-bezier(0.22, 1, 0.36, 1),
+                background 0.9s, border-color 0.9s, text-shadow 0.9s;
+    text-align: center; min-width: 220px; min-height: 68px;
+  }
+  #inputBox.center {
+    bottom: calc(50vh - 34px);
+    transform: translateX(-50%) scale(2.2);
+    background: rgba(0, 0, 0, 0.25); border-color: transparent;
+    text-shadow: 0 0 24px rgba(255, 217, 102, 0.9);
+  }
+  #caret { display: inline-block; width: 0.55em; animation: blink 1s steps(1) infinite; color: #ffd966; }
+  #inputBox.center #caret { display: none; }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  /* 摄像头预览 */
+  #preview {
+    position: fixed; top: 16px; right: 16px; width: 260px; aspect-ratio: 4/3;
+    border: 1px solid rgba(255, 200, 90, 0.55); border-radius: 8px; overflow: hidden;
+    box-shadow: 0 0 18px rgba(255, 180, 60, 0.35); opacity: 0; pointer-events: none;
+    transition: opacity 0.8s; z-index: 20; background: #000;
+  }
+  #preview.on { opacity: 1; }
+  #preview video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+  #preview canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+  /* 手势诊断面板（调试模式，摄像头预览下方） */
+  #gestPanel {
+    position: fixed; top: 222px; right: 16px; width: 260px; z-index: 20;
+    display: none; flex-direction: column; gap: 5px;
+    padding: 11px 13px; border-radius: 8px;
+    background: rgba(18, 9, 0, 0.85); border: 1px solid rgba(255, 185, 94, 0.35);
+    font: 12px/1.4 ui-monospace, Menlo, monospace; color: #ffdca8;
+  }
+  #gestPanel.on { display: flex; }
+  .gRow { display: flex; align-items: center; gap: 8px; }
+  .gDot { width: 11px; height: 11px; border-radius: 50%; background: #443322; flex: none; transition: all 0.08s; }
+  .gRow.active .gDot { background: #64ff8c; box-shadow: 0 0 9px #64ff8c; }
+  .gRow.active { color: #fff; }
+  .gv { margin-left: auto; color: #7fdc9a; font-size: 11px; letter-spacing: 0; }
+
+  #hint {
+    position: fixed; bottom: 8px; left: 50%; transform: translateX(-50%); z-index: 9;
+    color: rgba(255, 230, 200, 0.75); font-size: 13px; letter-spacing: 0.1em;
+    text-shadow: 0 1px 6px #000; white-space: nowrap;
+  }
+
+  /* 开场 */
+  #intro {
+    position: fixed; inset: 0; z-index: 40; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 20px; text-align: center;
+    background: radial-gradient(ellipse at center, rgba(8, 2, 0, 0.6) 0%, rgba(0, 0, 0, 0.93) 100%);
+    transition: opacity 1s; padding: 24px;
+  }
+  #intro.hidden { opacity: 0; pointer-events: none; }
+  #intro h1 {
+    color: #ff2a1a; font-size: clamp(30px, 5.2vw, 64px); letter-spacing: 0.3em; font-weight: 400;
+    text-shadow: 0 0 28px rgba(255, 40, 15, 0.8), 0 0 80px rgba(255, 40, 15, 0.4);
+  }
+  #intro h2 { color: #ffd966; font-size: clamp(16px, 2vw, 24px); letter-spacing: 0.5em; font-weight: 400;
+    text-shadow: 0 0 18px rgba(255, 200, 80, 0.7); }
+  #intro p { color: rgba(255, 220, 200, 0.78); font-size: 14px; letter-spacing: 0.12em; line-height: 2.2; }
+  #startBtn {
+    margin-top: 8px; padding: 13px 46px; font-family: inherit; font-size: 17px; letter-spacing: 0.3em;
+    color: #ffd9a0; background: transparent; border: 1px solid rgba(255, 185, 94, 0.8); border-radius: 3px;
+    cursor: pointer; transition: all 0.3s; text-indent: 0.3em;
+  }
+  #startBtn:hover:not(:disabled) { background: rgba(255, 170, 60, 0.15); box-shadow: 0 0 24px rgba(255, 170, 60, 0.45); color: #fff; }
+  #startBtn:disabled { opacity: 0.5; cursor: wait; }
+  #intro small { color: rgba(255, 200, 180, 0.4); font-size: 11px; letter-spacing: 0.08em; }
+
+  #toast {
+    position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 25;
+    color: #ffe2c5; font-size: 13px; letter-spacing: 0.08em; padding: 9px 20px;
+    background: rgba(30, 12, 0, 0.85); border: 1px solid rgba(255, 185, 94, 0.4); border-radius: 4px;
+    opacity: 0; transition: opacity 0.4s; pointer-events: none;
+  }
+  #toast.on { opacity: 1; }
+  #hud {
+    position: fixed; bottom: 8px; left: 10px; z-index: 25; display: none;
+    color: #7fdc9a; font: 11px/1.6 ui-monospace, Menlo, monospace; text-shadow: 0 1px 2px #000;
+  }
+
+  /* 打赏入口：伪装成手势面板的第 5 行——❤ 对齐 emoji 列、文字对齐「双手完成」标签列 */
+  #tipDock {
+    position: fixed; top: 330px; right: 16px; z-index: 22; width: 260px;
+    box-sizing: border-box; padding: 0 13px;
+    display: flex; align-items: center; gap: 8px;
+    font: 12px/1.4 ui-monospace, Menlo, monospace;
+  }
+  #tipDot { width: 11px; height: 11px; flex: none; visibility: hidden; } /* 占位，让❤落在 emoji 列 */
+  #tipHeart {
+    width: 18px; height: 18px; flex: none; padding: 0; border: none; background: none;
+    color: #ff6f8d; font-size: 17px; line-height: 18px; text-align: center;
+    opacity: 0.65; cursor: pointer; transition: opacity 0.4s, transform 0.2s;
+    text-shadow: 0 0 9px rgba(255, 110, 140, 0.75);
+  }
+  #tipDock:hover #tipHeart { opacity: 1; transform: scale(1.2); }
+  #tipLabel {
+    color: #ffdca8; font-size: 12px; letter-spacing: 0.05em;
+    text-shadow: 0 0 8px rgba(255, 200, 100, 0.5); user-select: none; white-space: nowrap;
+    opacity: 0.85; transition: opacity 0.4s;  /* 常驻可见 */
+  }
+  #tipDock:hover #tipLabel { opacity: 1; }
+  @keyframes tipPulse {
+    0%, 100% { opacity: 0.65; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.4); text-shadow: 0 0 18px rgba(255, 120, 150, 0.95); }
+  }
+  #tipHeart.hint { animation: tipPulse 1.2s ease-in-out 3; }
+  @keyframes tipPop {
+    0% { transform: scale(1); }
+    35% { transform: scale(1.55); }
+    60% { transform: scale(0.9); }
+    100% { transform: scale(1); }
+  }
+  #tipHeart.pop { animation: tipPop 0.42s ease; }
+
+  /* 点赞粒子：点击时从心口喷出的小心心/星星，上飘淡出 */
+  .likeParticle {
+    position: fixed; z-index: 30; pointer-events: none; line-height: 1;
+    color: #ff6f8d; text-shadow: 0 0 8px rgba(255, 120, 150, 0.85); will-change: transform, opacity;
+  }
+  @keyframes likeFloat {
+    0% { opacity: 0; transform: translate(0, 0) scale(0.4); }
+    18% { opacity: 1; }
+    100% { opacity: 0; transform: translate(var(--dx), var(--dy)) scale(1.15); }
+  }
+
+  #tipCard {
+    position: fixed; top: 366px; right: 16px; z-index: 23; width: 264px;
+    padding: 18px 18px 16px; border-radius: 12px;
+    background: rgba(24, 14, 4, 0.9); backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 180, 90, 0.35); box-shadow: 0 10px 40px rgba(0, 0, 0, 0.55);
+    opacity: 0; transform: translateY(-12px) scale(0.96); transform-origin: top right;
+    pointer-events: none; transition: opacity 0.35s, transform 0.35s;
+  }
+  #tipCard.on { opacity: 1; transform: translateY(0) scale(1); pointer-events: auto; }
+  #tipClose {
+    position: absolute; top: 7px; right: 9px; border: none; background: none;
+    color: rgba(255, 220, 190, 0.5); font-size: 20px; line-height: 1; cursor: pointer; padding: 2px 6px;
+  }
+  #tipClose:hover { color: #fff; }
+  .tipText {
+    color: rgba(255, 228, 200, 0.82); font-size: 13px; line-height: 1.9; letter-spacing: 0.02em;
+    margin: 2px 0 10px; text-align: center;
+  }
+  .tipCta { color: #ffc266; font-size: 14px; letter-spacing: 0.04em; margin-bottom: 12px; text-align: center; }
+  .tipQr { display: block; width: 100%; border-radius: 8px; background: #fff; }
+
+  /* 加载提示：首次进入要下模型，慢网用户别以为卡死 */
+  #loadNote {
+    color: rgba(255, 200, 150, 0.75); font-size: 12px; letter-spacing: 0.04em;
+    line-height: 1.7; margin-top: 2px; display: none; max-width: 300px;
+  }
+  #loadNote.on { display: block; }
+
+  /* 设备网关：手机 / App 内置浏览器打不开摄像头、也不适配竖屏，引导去电脑 */
+  #deviceGate {
+    position: fixed; inset: 0; z-index: 60; display: none;
+    flex-direction: column; align-items: center; justify-content: center; padding: 30px;
+    background: radial-gradient(ellipse at center, rgba(10, 3, 0, 0.9), rgba(0, 0, 0, 0.97));
+    text-align: center;
+  }
+  #deviceGate.on { display: flex; }
+  .dgCard { max-width: 360px; }
+  .dgIcon { font-size: 48px; margin-bottom: 14px; }
+  #deviceGate h2 { color: #ff6f3c; font-size: 22px; letter-spacing: 0.1em; font-weight: 400; margin-bottom: 16px;
+    text-shadow: 0 0 20px rgba(255, 90, 40, 0.6); }
+  #deviceGate p { color: rgba(255, 224, 200, 0.82); font-size: 14px; line-height: 1.9; margin-bottom: 14px; }
+  .dgTip { color: #ffd966 !important; }
+  .dgUrl {
+    display: flex; align-items: stretch; gap: 0; margin: 4px 0 22px;
+    border: 1px solid rgba(255, 185, 94, 0.5); border-radius: 6px; overflow: hidden;
+  }
+  #dgUrlText {
+    flex: 1; min-width: 0; padding: 10px 12px; font-size: 12px; color: #ffe4c8;
+    background: rgba(255, 255, 255, 0.05); text-align: left; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap; line-height: 1.5;
+  }
+  #dgCopy {
+    flex: none; padding: 0 16px; border: none; border-left: 1px solid rgba(255, 185, 94, 0.5);
+    background: rgba(255, 170, 60, 0.2); color: #ffd9a0; font-size: 13px; cursor: pointer;
+  }
+  #dgCopy:active { background: rgba(255, 170, 60, 0.45); }
+  #dgAnyway {
+    border: none; background: none; color: rgba(255, 210, 180, 0.45);
+    font-size: 12px; letter-spacing: 0.05em; cursor: pointer; text-decoration: underline;
+  }
+</style>
+</head>
+<body>
+  <img id="bgDark" class="bg" src="assets/room-dark.webp" alt="">
+  <img id="bgLit" class="bg" src="assets/room-lit.webp" alt="">
+  <div id="stage"></div>
+
+  <div id="cursorDot"></div>
+  <div id="hoverChip"></div>
+
+  <div id="inputBox"><span id="inputText"></span><span id="caret">_</span></div>
+
+  <div id="preview">
+    <video id="cam" autoplay playsinline muted></video>
+    <canvas id="landmarks" width="320" height="240"></canvas>
+  </div>
+
+  <div id="gestPanel">
+    <div class="gRow" id="gPinch"><span class="gDot"></span>🤏 捏合输入<span class="gv" id="vPinch"></span></div>
+    <div class="gRow" id="gSpace"><span class="gDot"></span>👍 空格<span class="gv" id="vSpace"></span></div>
+    <div class="gRow" id="gFist"><span class="gDot"></span>✌️ 剪刀手删除<span class="gv" id="vFist"></span></div>
+    <div class="gRow" id="gHands"><span class="gDot"></span>🙌 双手完成<span class="gv"></span></div>
+  </div>
+
+  <div id="hint"></div>
+
+  <div id="intro">
+    <h1>STRANGER THINGS</h1>
+    <h2>ALPHABET AR</h2>
+    <p>成为 Will，用灯泡向现实世界传话。<br>
+       ☝️ 食指指向字母 → 🤏 捏合输入 → 👍 空格 → ✌️ 剪刀手停一下=删除 → 🙌 双手举到胸前说完整句</p>
+    <button id="startBtn" disabled>加载中…</button>
+    <p id="loadNote">⏳ 首次进入要下载手势识别模型（约 17MB），<br>网络慢请多等几秒，别关掉～</p>
+    <small>桌面版 Chrome / Edge · 需要摄像头 · ?mouse=1 鼠标模式 · M 静音 · D 切换调试</small>
+  </div>
+
+  <div id="toast"></div>
+  <div id="hud"></div>
+
+  <div id="tipDock">
+    <span id="tipDot"></span>
+    <button id="tipHeart" aria-label="支持创作者" title="支持创作者">❤</button>
+    <span id="tipLabel">支持创作者</span>
+  </div>
+  <div id="tipCard">
+    <button id="tipClose" aria-label="关闭">×</button>
+    <p class="tipText">这是一个免费的 AI 交互小游戏。<br>
+      在《怪奇物语》里，<br>灯光连接着两个世界。<br>
+      而你的支持，<br>能连接下一个有趣的创意。<br>
+      创作不易，token 有点贵😭</p>
+    <p class="tipCta">❤️ 请创作者喝杯奶茶</p>
+    <img class="tipQr" src="assets/donate-qr.png" alt="赞赏码">
+  </div>
+
+  <div id="deviceGate">
+    <div class="dgCard">
+      <div class="dgIcon">💻</div>
+      <h2>请用电脑打开体验</h2>
+      <p>这个游戏需要<b>摄像头</b>识别你的手势，<br>而且是为电脑大屏设计的。<br>手机 / App 内置浏览器无法正常运行。</p>
+      <p class="dgTip">👉 用电脑 Chrome 或 Edge 打开这个网址：</p>
+      <div class="dgUrl"><span id="dgUrlText"></span><button id="dgCopy">复制</button></div>
+      <button id="dgAnyway">我知道了，还是想在这台设备上试试 →</button>
+    </div>
+  </div>
+
+  <!-- 访问埋点：只在线上跑，同域上报到自家云函数（国内可达），失败静默 -->
+  <script>
+  (function () {
+    try {
+      var h = location.hostname;
+      if (h === 'localhost' || h === '127.0.0.1' || h === '') return; // 本地不上报
+      var vid = localStorage.getItem('_vid'), isNew = 0;
+      if (!vid) { vid = Date.now().toString(36) + Math.random().toString(36).slice(2, 8); localStorage.setItem('_vid', vid); isNew = 1; }
+      // 用绝对地址：站点迁到 EdgeOne 自有域名后，统计仍回报到 Netlify 云函数
+      // （跨域简单 POST 无需预检就能送达，响应读不到也无所谓，本来就不读）
+      fetch('https://stranger-lights.netlify.app/.netlify/functions/track?new=' + isNew, { method: 'POST', keepalive: true }).catch(function () {});
+    } catch (e) {}
+  })();
+  </script>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
