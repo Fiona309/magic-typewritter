@@ -6,9 +6,10 @@
 //  HandsUp = 双手举起（整句完成）
 // 坐标已做水平镜像，与预览一致
 // 全部本地自托管，不依赖 googleapis / jsdelivr（国内 CDN 常打不开）
-import { FilesetResolver, HandLandmarker } from '../vendor/tasks-vision/vision_bundle.mjs';
+// 目录名避开 vendor：EdgeOne Pages 部署会把 vendor/ 当依赖目录整个排除（404）
+import { FilesetResolver, HandLandmarker } from '../mediapipe/tasks-vision/vision_bundle.mjs';
 
-const WASM_URL = 'vendor/tasks-vision/wasm';
+const WASM_URL = 'mediapipe/tasks-vision/wasm';
 const MODEL_URL = 'assets/hand_landmarker.task';
 
 export class HandInput {
