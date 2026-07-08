@@ -327,6 +327,12 @@
 
   <!-- 访问埋点：只在线上跑，同域上报到自家云函数（国内可达），失败静默 -->
   <script>
+  // 摄像头 API 只在 HTTPS 下可用，http 访问一律跳 https（本地开发除外）
+  if (location.protocol === 'http:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+    location.replace('https://' + location.host + location.pathname + location.search);
+  }
+  </script>
+  <script>
   (function () {
     try {
       var h = location.hostname;
