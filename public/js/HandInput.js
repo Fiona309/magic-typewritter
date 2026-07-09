@@ -24,6 +24,7 @@ export class HandInput {
     this.lastDetect = 0;
     this.lastVideoTime = -1;
     this.lastSeen = -Infinity;
+    this._handsUpSeen = -Infinity;
     this._pinch = false;
 
     this.state = {
@@ -161,13 +162,17 @@ export class HandInput {
     this.state.fist = P.f.fist;
     // 删除 = 主手剪刀手✌️（单手，内部仍用 cross 字段承载删除信号）
     this.state.cross = P.f.scissors;
-    // 双手举起分开 = 完成整句
-    let handsUp = false, dx = -1;
+    // 双手举起分开 = 完成整句。
+    // MediaPipe 的第二只手经常整段丢失（不止一两帧），检测层给"延续窗口"：
+    // 刚见过双手举起的 handsUpSustainMs 内，即使这帧只剩一只手也维持信号，
+    // 否则主循环的保持计时永远凑不满 → 音效响了画面却不完成
+    let handsUpNow = false, dx = -1;
     if (feats.length === 2) {
       dx = Math.abs(feats[0].lm[0].x - feats[1].lm[0].x);
-      if (feats.every((h) => h.f.raised) && dx > (this.cfg.handsSeparate ?? 0.32)) handsUp = true;
+      if (feats.every((h) => h.f.raised) && dx > (this.cfg.handsSeparate ?? 0.24)) handsUpNow = true;
     }
-    this.state.handsUp = handsUp;
+    if (handsUpNow) this._handsUpSeen = now;
+    this.state.handsUp = now - this._handsUpSeen < (this.cfg.handsUpSustainMs ?? 400);
     // 原始数值（诊断面板用）
     this.vals = { pinch: P.f.pinch, open: P.f.openness, idx: P.f.indexExt, mid: P.f.midExt, dx };
 

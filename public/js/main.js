@@ -12,7 +12,7 @@ const els = {
   toast: $('toast'), hud: $('hud'),
   gestPanel: $('gestPanel'),
   gPinch: $('gPinch'), gSpace: $('gSpace'), gFist: $('gFist'), gHands: $('gHands'),
-  vPinch: $('vPinch'), vSpace: $('vSpace'), vFist: $('vFist'),
+  vPinch: $('vPinch'), vSpace: $('vSpace'), vFist: $('vFist'), vHands: $('vHands'),
   tipHeart: $('tipHeart'), tipCard: $('tipCard'), tipClose: $('tipClose'),
   loadNote: $('loadNote'),
   deviceGate: $('deviceGate'), dgUrlText: $('dgUrlText'), dgCopy: $('dgCopy'), dgAnyway: $('dgAnyway'),
@@ -382,8 +382,9 @@ function loop(now) {
       els.vPinch.textContent = `${hands.vals.pinch.toFixed(2)}  需<${H.pinchOn}`;
       els.vSpace.textContent = `抬${hands.vals.lift.toFixed(2)} 需>${H.thumbLift}`;
       els.vFist.textContent = `中指${hands.vals.mid.toFixed(2)} 需>${H.scissorExtend}`;
+      els.vHands.textContent = hands.vals.dx >= 0 ? `距${hands.vals.dx.toFixed(2)} 需>${H.handsSeparate}` : '只见到一只手';
     } else {
-      els.vPinch.textContent = els.vSpace.textContent = els.vFist.textContent = '— 无手';
+      els.vPinch.textContent = els.vSpace.textContent = els.vFist.textContent = els.vHands.textContent = '— 无手';
     }
   }
 }
