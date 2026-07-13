@@ -251,7 +251,8 @@ async function start() {
     try {
       await hands.init();
       els.preview.classList.add('on');
-      if (DEBUG) hands.setDebug(true);
+      // 手机默认画手部关键点：玩家能直观看到"镜头看到了我的手"（桌面仍跟随调试开关）
+      hands.setDebug(DEBUG || IS_TOUCH);
       // 手机前摄视野窄，手太近就出画：给一次取景引导
       if (IS_TOUCH) toast('📷 把整只手放进右上角小窗里，离镜头 40~60 厘米最稳');
     } catch (err) {

@@ -13,6 +13,15 @@ import { FilesetResolver, HandLandmarker } from '../mediapipe/tasks-vision/visio
 const WASM_URL = 'mediapipe/tasks-vision/wasm';
 const MODEL_URL = 'assets/hand_landmarker.task';
 
+// 手部骨架连线（MediaPipe 21 关键点标准连接：拇指→小指 + 掌缘）
+const HAND_CONNS = [
+  [0, 1], [1, 2], [2, 3], [3, 4],
+  [0, 5], [5, 6], [6, 7], [7, 8],
+  [5, 9], [9, 10], [10, 11], [11, 12],
+  [9, 13], [13, 14], [14, 15], [15, 16],
+  [13, 17], [17, 18], [18, 19], [19, 20], [0, 17],
+];
+
 export class HandInput {
   constructor({ video, overlay, config }) {
     this.video = video;
@@ -206,6 +215,15 @@ export class HandInput {
     const g = cv.getContext('2d');
     g.clearRect(0, 0, cv.width, cv.height);
     for (const lm of hands) {
+      // 骨架连线（MediaPipe 21 关键点标准连接）
+      g.strokeStyle = 'rgba(255, 217, 102, 0.5)';
+      g.lineWidth = 1.5;
+      for (const [a, b] of HAND_CONNS) {
+        g.beginPath();
+        g.moveTo((1 - lm[a].x) * cv.width, lm[a].y * cv.height);
+        g.lineTo((1 - lm[b].x) * cv.width, lm[b].y * cv.height);
+        g.stroke();
+      }
       g.fillStyle = '#ffd966';
       for (const p of lm) {
         g.beginPath();
