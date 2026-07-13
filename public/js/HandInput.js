@@ -59,7 +59,8 @@ export class HandInput {
   async init() {
     const cam = (async () => {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: 640, height: 480, facingMode: 'user' },
+        // 手机降分辨率：减少每帧纹理上传，识别更不卡
+        video: { width: this.cfg.camW ?? 640, height: this.cfg.camH ?? 480, facingMode: 'user' },
         audio: false,
       });
       this.video.srcObject = stream;
@@ -120,7 +121,8 @@ export class HandInput {
 
   update(now) {
     if (!this.tracking || this.video.readyState < 2) return;
-    if (now - this.lastDetect < 30 || this.video.currentTime === this.lastVideoTime) {
+    // 手机拉大检测间隔：单次推理耗时长，太密会把主线程卡成幻灯片
+    if (now - this.lastDetect < (this.cfg.detectEveryMs ?? 30) || this.video.currentTime === this.lastVideoTime) {
       this._decay(now);
       return;
     }

@@ -72,8 +72,12 @@ function boot() {
     video: els.cam, overlay: els.landmarks,
     config: {
       ...CONFIG.hand,
-      smooth: CONFIG.hover.smooth,
+      smooth: IS_TOUCH ? 0.5 : CONFIG.hover.smooth, // 手机检测帧率低，平滑太重会拖手
       handsUpY: CONFIG.gestures.handsUpY,
+      // 手机降档：识别 ~16fps、摄像头 480×360，把主线程让给渲染
+      detectEveryMs: IS_TOUCH ? 60 : 30,
+      camW: IS_TOUCH ? 480 : 640,
+      camH: IS_TOUCH ? 360 : 480,
     },
   });
   if (!FORCE_MOUSE) hands.preload().catch(() => {}); // 后台预载 WASM+模型，点开始时基本秒开
@@ -246,6 +250,8 @@ async function start() {
       await hands.init();
       els.preview.classList.add('on');
       if (DEBUG) hands.setDebug(true);
+      // 手机前摄视野窄，手太近就出画：给一次取景引导
+      if (IS_TOUCH) toast('📷 把整只手放进右上角小窗里，离镜头 40~60 厘米最稳');
     } catch (err) {
       console.warn('摄像头不可用，退回鼠标模式', err);
       toast('摄像头不可用 — 鼠标模式：移动=指向，点击=输入，空格/退格/回车');
