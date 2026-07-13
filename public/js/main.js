@@ -188,7 +188,9 @@ function layout() {
   dispW = Math.max(W, H * A);
   dispH = Math.max(H, W / A);
   offX = (W - dispW) / 2;
-  offY = (H - dispH) / 2;
+  // 纵向裁切偏置：手机横屏等宽画面裁上下时，多留顶部字母、多裁底部沙发。
+  // 必须与 CSS .bg 的 object-position 纵向百分比一致，否则字母坐标对不上图
+  offY = (H - dispH) * (CONFIG.bg.coverBiasY ?? 0.5);
   for (const [letter, def] of Object.entries(CONFIG.letters)) {
     glowEls[letter].style.left = `${offX + def.l[0] * dispW}px`;
     glowEls[letter].style.top = `${offY + def.l[1] * dispH}px`;

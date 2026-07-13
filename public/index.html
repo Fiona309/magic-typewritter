@@ -10,7 +10,8 @@
   html, body { height: 100%; background: #000; overflow: hidden; font-family: Georgia, 'Times New Roman', 'Songti SC', serif; touch-action: manipulation; }
 
   /* 背景：暗客厅 + 全亮客厅（celebrate 时淡入/闪烁） */
-  .bg { position: fixed; inset: 0; width: 100vw; height: 100vh; object-fit: cover; user-select: none; pointer-events: none; }
+  /* object-position 纵向 20%：宽屏裁切时多留顶部字母墙、多裁底部沙发（与 main.js layout() 的 coverBiasY 一致） */
+  .bg { position: fixed; inset: 0; width: 100vw; height: 100vh; object-fit: cover; object-position: 50% 20%; user-select: none; pointer-events: none; }
   /* will-change 让亮图常驻合成层：完成瞬间只做现成图层的淡入，
      否则当帧新建图层+光栅化全屏大图，来不及画完的图块会黑一帧 */
   #bgLit { opacity: 0; transition: opacity 0.6s; will-change: opacity; }
@@ -290,7 +291,16 @@
     #hint { font-size: 10px; bottom: 4px; white-space: normal; max-width: 94vw; line-height: 1.5; }
     #toast { font-size: 11px; max-width: 92vw; padding: 7px 14px; }
     #tipDock { top: auto; bottom: 42px; right: 8px; width: auto; padding: 0; }
-    #tipCard { top: auto; bottom: 74px; right: 8px; width: 232px; padding: 14px 14px 12px; }
+    /* 手机横屏屏幕矮：打赏卡片改居中紧凑版，内容超高可滚动 */
+    #tipCard {
+      top: 50%; bottom: auto; right: auto; left: 50%; width: 250px;
+      padding: 12px 14px 12px; transform: translate(-50%, -46%) scale(0.96); transform-origin: center;
+      max-height: calc(100vh - 14px); overflow-y: auto;
+    }
+    #tipCard.on { transform: translate(-50%, -50%) scale(1); }
+    .tipText { font-size: 11px; line-height: 1.65; margin: 0 0 8px; }
+    .tipCta { font-size: 12px; margin-bottom: 8px; }
+    .tipQr { width: 118px; margin: 0 auto; }
     #intro { gap: 12px; }
     #intro p { font-size: 12px; line-height: 1.9; }
     #startBtn { padding: 10px 36px; font-size: 15px; }

@@ -4,6 +4,7 @@ export const CONFIG = {
     dark: 'assets/room-dark.webp',
     lit: 'assets/room-lit.webp',
     aspect: 1536 / 1024,
+    coverBiasY: 0.2,   // 纵向裁切偏置（0=只裁底部 0.5=居中）：与 index.html .bg object-position 同步改
   },
 
   // 每个字母：l = 字形位置，b = 对应灯泡位置（挂在字母上方的电线上）
