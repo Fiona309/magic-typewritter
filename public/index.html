@@ -272,6 +272,10 @@
   @keyframes rgTurn { 0%, 25% { transform: rotate(0deg); } 65%, 100% { transform: rotate(90deg); } }
   #rotateGate h2 { color: #ffd966; font-size: 20px; letter-spacing: 0.2em; font-weight: 400; text-shadow: 0 0 18px rgba(255, 200, 80, 0.7); }
   #rotateGate p { color: rgba(255, 224, 200, 0.75); font-size: 13px; line-height: 1.9; }
+  #rotateGate button {
+    padding: 10px 26px; font-family: inherit; font-size: 14px; letter-spacing: 0.15em;
+    color: #ffd9a0; background: transparent; border: 1px solid rgba(255, 185, 94, 0.8); border-radius: 3px; cursor: pointer;
+  }
   @media (orientation: portrait) and (pointer: coarse) {
     #rotateGate { display: flex; }
   }
@@ -351,8 +355,21 @@
   <div id="rotateGate">
     <div class="rgIcon">📱</div>
     <h2>把手机横过来</h2>
-    <p>字母墙是横屏游戏<br>请先解除手机的竖排方向锁定，再旋转横持</p>
+    <p id="rgTip">字母墙是横屏游戏。转了屏幕却没反应？<br>是系统的方向锁定开着：<br><b>iPhone</b>：右上角下滑打开控制中心 → 点掉 🔒 方向锁定<br><b>安卓</b>：下拉通知栏 → 打开「自动旋转」</p>
+    <button id="rgBtn">🔄 点我试试自动横屏</button>
   </div>
+  <script>
+  // 安卓 Chrome 支持网页主动锁横屏（需先全屏）；iPhone 不允许，失败则提示手动解锁
+  document.getElementById('rgBtn').onclick = async function () {
+    try {
+      await document.documentElement.requestFullscreen();
+      await screen.orientation.lock('landscape');
+    } catch (e) {
+      document.getElementById('rgTip').innerHTML =
+        '这台手机不支持网页自动横屏 😅<br>请手动操作：<b>iPhone</b> 右上角下滑打开控制中心，<br>点掉红色的 🔒 方向锁定图标，再把手机横过来';
+    }
+  };
+  </script>
 
   <div id="deviceGate">
     <div class="dgCard">
