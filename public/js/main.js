@@ -19,7 +19,9 @@ const els = {
 };
 
 const params = new URLSearchParams(location.search);
-let DEBUG = !params.has('nodebug'); // 调试默认开启
+const IS_TOUCH = matchMedia('(pointer: coarse)').matches;
+// 桌面默认开调试（?nodebug 关）；手机屏幕小默认关（?debug=1 强开，供真机调阈值）
+let DEBUG = params.has('debug') || (!params.has('nodebug') && !IS_TOUCH);
 const FORCE_MOUSE = params.has('mouse');
 const AUTO = params.has('auto');
 
@@ -122,15 +124,14 @@ function boot() {
   if (AUTO) start();
 }
 
-// 设备网关：手机 / App 内置浏览器（微信/抖音/小红书等）打不开摄像头、也不适配竖屏，引导去电脑。
+// 设备网关：只拦 App 内置浏览器（微信/抖音/小红书等，调不了摄像头）→ 引导去真浏览器。
+// 手机浏览器可以玩：竖屏由 rotateGate 引导横屏，布局有小屏适配。
 // ?force=1 或点“还是想试试”可绕过。
 function checkDevice() {
   const ua = navigator.userAgent;
   const inApp = /MicroMessenger|WeiBo|QQ\/|QQBrowser|TikTok|musical_ly|BytedanceWebview|Lark|XiaoHongShu|xhsdiscover|com\.xingin/i.test(ua);
-  const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(ua)
-    || (navigator.maxTouchPoints > 1 && Math.min(innerWidth, innerHeight) < 820 && !matchMedia('(pointer:fine)').matches);
   if (params.has('force') || FORCE_MOUSE || AUTO) return;   // 明确要绕过时不拦
-  if (!isMobile && !inApp) return;
+  if (!inApp) return;
 
   els.dgUrlText.textContent = location.href;
   els.deviceGate.classList.add('on');

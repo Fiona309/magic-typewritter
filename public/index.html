@@ -2,12 +2,12 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <link rel="icon" href="data:,">
 <title>Stranger Things · Alphabet AR</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  html, body { height: 100%; background: #000; overflow: hidden; font-family: Georgia, 'Times New Roman', 'Songti SC', serif; }
+  html, body { height: 100%; background: #000; overflow: hidden; font-family: Georgia, 'Times New Roman', 'Songti SC', serif; touch-action: manipulation; }
 
   /* 背景：暗客厅 + 全亮客厅（celebrate 时淡入/闪烁） */
   .bg { position: fixed; inset: 0; width: 100vw; height: 100vh; object-fit: cover; user-select: none; pointer-events: none; }
@@ -260,6 +260,40 @@
     border: none; background: none; color: rgba(255, 210, 180, 0.45);
     font-size: 12px; letter-spacing: 0.05em; cursor: pointer; text-decoration: underline;
   }
+
+  /* ===== 手机适配 ===== */
+  /* 竖屏引导：游戏为横屏设计，触屏设备竖持时盖引导层 */
+  #rotateGate {
+    position: fixed; inset: 0; z-index: 55; display: none; flex-direction: column;
+    align-items: center; justify-content: center; gap: 16px; text-align: center;
+    background: radial-gradient(ellipse at center, rgba(10, 3, 0, 0.92), #000); padding: 30px;
+  }
+  #rotateGate .rgIcon { font-size: 56px; animation: rgTurn 1.8s ease-in-out infinite; }
+  @keyframes rgTurn { 0%, 25% { transform: rotate(0deg); } 65%, 100% { transform: rotate(90deg); } }
+  #rotateGate h2 { color: #ffd966; font-size: 20px; letter-spacing: 0.2em; font-weight: 400; text-shadow: 0 0 18px rgba(255, 200, 80, 0.7); }
+  #rotateGate p { color: rgba(255, 224, 200, 0.75); font-size: 13px; line-height: 1.9; }
+  @media (orientation: portrait) and (pointer: coarse) {
+    #rotateGate { display: flex; }
+  }
+  /* 手机横屏：小屏收缩布局（触屏 + 矮视口才生效，不影响桌面） */
+  @media (pointer: coarse) and (max-height: 560px) {
+    #preview { width: 132px; top: 8px; right: 8px; border-radius: 6px; }
+    #gestPanel { width: 152px; top: 114px; right: 8px; font-size: 10px; padding: 7px 8px; gap: 3px; }
+    #gestPanel .gv { font-size: 9px; }
+    #hoverChip { font-size: 26px; left: 12px; top: 8px; }
+    #inputBox { font-size: 20px; min-height: 44px; min-width: 150px; padding: 8px 20px; bottom: 30px; }
+    #inputBox.center { bottom: calc(50vh - 22px); transform: translateX(-50%) scale(1.55); }
+    #hint { font-size: 10px; bottom: 4px; white-space: normal; max-width: 94vw; line-height: 1.5; }
+    #toast { font-size: 11px; max-width: 92vw; padding: 7px 14px; }
+    #tipDock { top: auto; bottom: 42px; right: 8px; width: auto; padding: 0; }
+    #tipCard { top: auto; bottom: 74px; right: 8px; width: 232px; padding: 14px 14px 12px; }
+    #intro { gap: 12px; }
+    #intro p { font-size: 12px; line-height: 1.9; }
+    #startBtn { padding: 10px 36px; font-size: 15px; }
+    #intro small { display: none; }
+    #loadNote { font-size: 11px; }
+    #cursorDot { width: 20px; height: 20px; }
+  }
 </style>
 </head>
 <body>
@@ -293,7 +327,7 @@
        ☝️ 食指指向字母 → 🤏 捏合输入 → 👍 空格 → ✌️ 剪刀手停一下=删除 → 🙌 双手举到胸前说完整句</p>
     <button id="startBtn" disabled>加载中…</button>
     <p id="loadNote">⏳ 首次进入要下载手势识别模型（约 17MB），<br>网络慢请多等几秒，别关掉～</p>
-    <small>桌面版 Chrome / Edge · 需要摄像头 · ?mouse=1 鼠标模式 · M 静音 · D 切换调试</small>
+    <small>电脑 Chrome / Edge · 手机浏览器横屏可玩 · 需要摄像头 · ?mouse=1 鼠标模式 · M 静音 · D 切换调试</small>
   </div>
 
   <div id="toast"></div>
@@ -314,14 +348,20 @@
     <img class="tipQr" src="assets/donate-qr.png" alt="赞赏码">
   </div>
 
+  <div id="rotateGate">
+    <div class="rgIcon">📱</div>
+    <h2>把手机横过来</h2>
+    <p>字母墙是横屏游戏<br>请先解除手机的竖排方向锁定，再旋转横持</p>
+  </div>
+
   <div id="deviceGate">
     <div class="dgCard">
-      <div class="dgIcon">💻</div>
-      <h2>请用电脑打开体验</h2>
-      <p>这个游戏需要<b>摄像头</b>识别你的手势，<br>而且是为电脑大屏设计的。<br>手机 / App 内置浏览器无法正常运行。</p>
-      <p class="dgTip">👉 用电脑 Chrome 或 Edge 打开这个网址：</p>
+      <div class="dgIcon">🧭</div>
+      <h2>请用浏览器打开</h2>
+      <p>当前 App 的内置浏览器<b>无法调用摄像头</b>，<br>没法识别你的手势。</p>
+      <p class="dgTip">👉 点右上角 ··· 菜单选「在浏览器中打开」，<br>或复制链接粘贴到 Safari / Chrome：</p>
       <div class="dgUrl"><span id="dgUrlText"></span><button id="dgCopy">复制</button></div>
-      <button id="dgAnyway">我知道了，还是想在这台设备上试试 →</button>
+      <button id="dgAnyway">我知道了，还是想在这里试试 →</button>
     </div>
   </div>
 
