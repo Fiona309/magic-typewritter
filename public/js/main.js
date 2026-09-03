@@ -11,12 +11,14 @@ const els = {
   cursor:$('cursorDot'), preview:$('preview'), cam:$('cam'), landmarks:$('landmarks'),
   intro:$('intro'), startBtn:$('startBtn'), loadNote:$('loadNote'), hint:$('hint'), toast:$('toast'), hud:$('hud'),
   restartNote:$('restartNote'), replayBtn:$('replayBtn'), deviceGate:$('deviceGate'), dgAnyway:$('dgAnyway'),
+  calibrator:$('mobileCalibrator'), calibrationFill:$('calibrationFill'), calibrationState:$('calibrationState'), calibrationSkip:$('calibrationSkip'),
 };
 
 const params = new URLSearchParams(location.search);
 const IS_TOUCH = matchMedia('(pointer:coarse)').matches;
 const FORCE_MOUSE = params.has('mouse');
 const DEBUG = params.has('debug');
+const INPUT_PROFILE = IS_TOUCH && CONFIG.mobile ? CONFIG.mobile : { hover:CONFIG.hover, hand:CONFIG.hand, gestures:CONFIG.gestures };
 const RESPONSES = {
   MUSIC:'LET THE WORLD HEAR IT.', GAMES:'BUILD A WORLD WORTH PLAYING.',
   STORIES:'MAKE SOMEONE FEEL SOMETHING.', FILMS:'TURN IDEAS INTO SCENES.',
@@ -51,8 +53,8 @@ function boot() {
   audio = new AudioFX();
   hands = new HandInput({
     video:els.cam, overlay:els.landmarks,
-    config:{ ...CONFIG.hand, smooth:IS_TOUCH?.5:CONFIG.hover.smooth, handsUpY:CONFIG.hand.raiseY,
-      detectEveryMs:IS_TOUCH?60:30, camW:IS_TOUCH?480:640, camH:IS_TOUCH?360:480 },
+    config:{ ...INPUT_PROFILE.hand, smooth:INPUT_PROFILE.hover.smooth, handsUpY:INPUT_PROFILE.hand.raiseY,
+      detectEveryMs:INPUT_PROFILE.camera?.detectEveryMs ?? 30, camW:INPUT_PROFILE.camera?.width ?? 640, camH:INPUT_PROFILE.camera?.height ?? 480 },
   });
   if (!FORCE_MOUSE) hands.preload().catch(()=>{});
 
@@ -85,7 +87,10 @@ async function start() {
     els.loadNote.classList.add('on');
     const revealCamera = () => els.preview.classList.add('on');
     els.cam.addEventListener('loadeddata', revealCamera, { once:true });
-    try { await hands.init(); revealCamera(); hands.setDebug(true); }
+    try {
+      await hands.init(); revealCamera(); hands.setDebug(true);
+      if (IS_TOUCH) await calibrateMobile();
+    }
     catch (error) {
       console.warn('Camera fallback:', error);
       if (els.cam.srcObject) {
@@ -101,6 +106,40 @@ async function start() {
   }
   els.intro.classList.add('hidden');
   await beginCurrentMode();
+}
+
+function calibrateMobile() {
+  const cfg=INPUT_PROFILE.calibration || {holdMs:1400,lostGraceMs:400,timeoutMs:10000};
+  els.calibrator.classList.add('on');
+  els.calibrationFill.style.width='0%';
+  els.calibrationState.textContent='正在寻找你的手…';
+  return new Promise(resolve=>{
+    let seenAt=0,lastSeen=0,finished=false,frame=0;
+    const started=performance.now();
+    const finish=(message)=>{
+      if(finished)return; finished=true; cancelAnimationFrame(frame);
+      els.calibrationState.textContent=message;
+      els.calibrationFill.style.width='100%';
+      setTimeout(()=>{els.calibrator.classList.remove('on');resolve();},420);
+    };
+    els.calibrationSkip.onclick=()=>finish('已跳过，可随时重新载入校准');
+    const tick=(now)=>{
+      if(finished)return;
+      if(hands.state.present){
+        if(!seenAt || now-lastSeen>cfg.lostGraceMs)seenAt=now;
+        lastSeen=now;
+        const progress=Math.min(1,(now-seenAt)/cfg.holdMs);
+        els.calibrationFill.style.width=`${Math.round(progress*100)}%`;
+        els.calibrationState.textContent=progress>.72?'很好，保持不动…':'已识别手掌，正在稳定指针…';
+        if(progress>=1){finish('校准完成，魔法指针已就位');return;}
+      }else if(seenAt && now-lastSeen>cfg.lostGraceMs){
+        seenAt=0; els.calibrationFill.style.width='0%'; els.calibrationState.textContent='请把完整手掌放回镜头中央';
+      }
+      if(now-started>cfg.timeoutMs){finish('已采用手机默认校准参数');return;}
+      frame=requestAnimationFrame(tick);
+    };
+    frame=requestAnimationFrame(tick);
+  });
 }
 
 function beginCurrentMode(){ return mode==='free'?beginFree():beginName(); }
@@ -252,6 +291,13 @@ function resetVisuals() {
 function layout() {
   const W=innerWidth,H=innerHeight,A=1672/941;
   dispW=Math.max(W,H*A); dispH=Math.max(H,W/A); offX=(W-dispW)/2; offY=(H-dispH)/2;
+  const root=document.documentElement.style;
+  root.setProperty('--paper-left',`${offX+.5*dispW}px`);
+  root.setProperty('--paper-top',`${offY+.052*dispH}px`);
+  root.setProperty('--paper-scroll-top',`${offY+.052*dispH}px`);
+  root.setProperty('--paper-ending-top',`${offY-.022*dispH}px`);
+  root.setProperty('--paper-width',`${.491*dispW}px`);
+  root.setProperty('--paper-height',`${.29*dispH}px`);
   document.documentElement.style.setProperty('--key-size',`${.0545*dispW}px`);
   document.documentElement.style.setProperty('--key-font-size',`${.0295*dispW}px`);
   for (const [letter,[x,y]] of Object.entries(CONFIG.letters)) {
@@ -287,7 +333,8 @@ function updateInput(dt,input) {
   if (!input.present || !isTyping()) {
     next=null;
   } else if (!input.fist && !input.pinch) {
-    const radius=CONFIG.hover.radius*dispW;
+    const hoverCfg=INPUT_PROFILE.hover;
+    const radius=hoverCfg.radius*dispW;
     let bestDistance=radius,bestLetter=null,currentDistance=Infinity;
     for (const letter of Object.keys(CONFIG.letters)) {
       const [x,y]=letterScreen(letter);
@@ -296,7 +343,7 @@ function updateInput(dt,input) {
       if (distance<bestDistance) { bestDistance=distance; bestLetter=letter; }
     }
     next=bestLetter;
-    if (hovered && next && next!==hovered && currentDistance<radius*1.4 && bestDistance>currentDistance*CONFIG.hover.sticky) {
+    if (hovered && next && next!==hovered && currentDistance<radius*1.4 && bestDistance>currentDistance*hoverCfg.sticky) {
       next=hovered;
     }
   }
@@ -313,13 +360,13 @@ function updateInput(dt,input) {
   thumbCooldown=Math.max(0,thumbCooldown-dt);
   if (input.thumbsUp && !prevThumb && thumbCooldown<=0) {
     doSpace();
-    thumbCooldown=CONFIG.gestures.thumbCooldown;
+    thumbCooldown=INPUT_PROFILE.gestures.thumbCooldown;
   }
   prevThumb=input.thumbsUp;
 
   if (input.cross) {
     scissorTime+=dt;
-    if (!scissorFired && scissorTime>=CONFIG.hand.scissorHold) {
+    if (!scissorFired && scissorTime>=INPUT_PROFILE.hand.scissorHold) {
       doDelete();
       scissorFired=true;
     }
@@ -331,11 +378,11 @@ function updateInput(dt,input) {
   if (input.handsUp) {
     handsGrace=0;
     handsUpTime+=dt;
-    if (handsUpTime>=CONFIG.gestures.handsUpHold) {
+    if (handsUpTime>=INPUT_PROFILE.gestures.handsUpHold) {
       handsUpTime=0;
       doComplete();
     }
-  } else if (handsUpTime>0 && handsGrace<CONFIG.gestures.handsUpGrace) {
+  } else if (handsUpTime>0 && handsGrace<INPUT_PROFILE.gestures.handsUpGrace) {
     handsGrace+=dt;
   } else {
     handsUpTime=0;
